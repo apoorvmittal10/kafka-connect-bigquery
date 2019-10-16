@@ -19,34 +19,40 @@ package com.wepay.kafka.connect.bigquery.write.batch;
 
 
 import com.google.cloud.bigquery.BigQueryException;
-import com.google.cloud.bigquery.InsertAllRequest.RowToInsert;
 
+import com.wepay.kafka.connect.bigquery.SchemaManager;
 import com.wepay.kafka.connect.bigquery.convert.RecordConverter;
+import com.wepay.kafka.connect.bigquery.exception.BigQueryConnectException;
+import com.wepay.kafka.connect.bigquery.exception.InvalidSchemaException;
 import com.wepay.kafka.connect.bigquery.utils.PartitionedTableId;
 import com.wepay.kafka.connect.bigquery.write.row.BigQueryWriter;
-
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.sink.SinkRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import java.util.stream.Collectors;
+import org.apache.kafka.connect.errors.ConnectException;
+
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Simple Table Writer that attempts to write all the rows it is given at once.
  */
-public class TableWriter implements Runnable {
+public class TableWriter extends AbstractTableWriter implements Runnable {
 
   private static final Logger logger = LoggerFactory.getLogger(TableWriter.class);
 
   private static final int BAD_REQUEST_CODE = 400;
   private static final String INVALID_REASON = "invalid";
+  // The maximum number of retries we will attempt to write rows after updating a BQ table schema.
+  private static final int AFTER_UPDATE_RETY_LIMIT = 5;
 
   private final BigQueryWriter writer;
   private final PartitionedTableId table;
-  private final List<RowToInsert> rows;
+  private final List<SinkRecord> rows;
   private final String topic;
 
   /**
@@ -54,15 +60,25 @@ public class TableWriter implements Runnable {
    * @param table the BigQuery table to write to.
    * @param rows the rows to write.
    * @param topic the kafka source topic of this data.
+   * @param recordConverter the {@link RecordConverter} used to convert records to rows.
+   * @param schemaManager the {@link SchemaManager} used to update BigQuery tables.
+   * @param sanitizeData the boolean specifying whether to sanitize data before persisting.
    */
   public TableWriter(BigQueryWriter writer,
                      PartitionedTableId table,
-                     List<RowToInsert> rows,
-                     String topic) {
+                     List<SinkRecord> rows,
+                     String topic,
+                     RecordConverter<Map<String, Object>> recordConverter,
+                     SchemaManager schemaManager,
+                     boolean sanitizeData) {
     this.writer = writer;
     this.table = table;
     this.rows = rows;
     this.topic = topic;
+
+    this.recordConverter = recordConverter;
+    this.schemaManager = schemaManager;
+    this.sanitizeData = sanitizeData;
   }
 
   @Override
@@ -71,21 +87,41 @@ public class TableWriter implements Runnable {
     int currentBatchSize = rows.size();
     int successCount = 0;
     int failureCount = 0;
+    int invalidSchemaErrorCount = 0;
+    boolean schemaUpdateExecuted = false;
 
     try {
       while (currentIndex < rows.size()) {
-        List<RowToInsert> currentBatch =
+        List<SinkRecord> currentBatch =
             rows.subList(currentIndex, Math.min(currentIndex + currentBatchSize, rows.size()));
         try {
-          writer.writeRows(table, currentBatch, topic);
+          writer.writeRows(table, currentBatch.stream().map(r -> getRecordRow(r)).
+              collect(Collectors.toList()), topic);
           currentIndex += currentBatchSize;
           successCount++;
+          // Set schema update to false as schema exception might occur for next batch.
+          schemaUpdateExecuted = false;
+          invalidSchemaErrorCount = 0;
         } catch (BigQueryException err) {
           if (isBatchSizeError(err)) {
             failureCount++;
             currentBatchSize = getNewBatchSize(currentBatchSize);
           }
+        } catch (InvalidSchemaException err) {
+          if (invalidSchemaErrorCount > AFTER_UPDATE_RETY_LIMIT) {
+            throw new BigQueryConnectException(
+                "Failed to write rows after BQ schema update within "
+                    + AFTER_UPDATE_RETY_LIMIT + " attempts for: " + table.getBaseTableId());
+          }
+
+          invalidSchemaErrorCount++;
+          // try updating new schema if not already done.
+          if (!schemaUpdateExecuted) {
+            attemptSchemaUpdate(this.table, this.topic, currentBatch);
+            schemaUpdateExecuted = true;
+          }
         }
+
       }
     } catch (InterruptedException err) {
       throw new ConnectException("Thread interrupted while writing to BigQuery.", err);
@@ -100,7 +136,6 @@ public class TableWriter implements Runnable {
     } else {
       logger.debug(logMessage, rows.size(), successCount, failureCount);
     }
-
   }
 
   private static int getNewBatchSize(int currentBatchSize) {
@@ -146,21 +181,29 @@ public class TableWriter implements Runnable {
 
   public static class Builder implements TableWriterBuilder {
     private final BigQueryWriter writer;
+
     private final PartitionedTableId table;
     private final String topic;
 
-    private List<RowToInsert> rows;
+    private final List<SinkRecord> rows;
 
-    private RecordConverter<Map<String, Object>> recordConverter;
+    private final RecordConverter<Map<String, Object>> recordConverter;
+
+    private final SchemaManager schemaManager;
+    private final boolean sanitizeData;
 
     /**
      * @param writer the BigQueryWriter to use
      * @param table the BigQuery table to write to.
      * @param topic the kafka source topic associated with the given table.
-     * @param recordConverter the record converter used to convert records to rows
+     * @param recordConverter the {@link RecordConverter} used to convert records to rows.
+     * @param schemaManager the {@link SchemaManager} used to update BigQuery tables.
+     * @param sanitizeData the boolean specifying whether to sanitize data before persisting.
      */
     public Builder(BigQueryWriter writer, PartitionedTableId table, String topic,
-                   RecordConverter<Map<String, Object>> recordConverter) {
+                   RecordConverter<Map<String, Object>> recordConverter,
+                   SchemaManager schemaManager,
+                   boolean sanitizeData) {
       this.writer = writer;
       this.table = table;
       this.topic = topic;
@@ -168,33 +211,19 @@ public class TableWriter implements Runnable {
       this.rows = new ArrayList<>();
 
       this.recordConverter = recordConverter;
+      this.schemaManager = schemaManager;
+      this.sanitizeData = sanitizeData;
     }
 
-    /**
-     * Add a record to the builder.
-     * @param rowToInsert the row to add
-     */
-    public void addRow(RowToInsert rowToInsert) {
-      rows.add(rowToInsert);
+    @Override
+    public void addRow(SinkRecord record) {
+      rows.add(record);
     }
 
-    private RowToInsert getRecordRow(SinkRecord record) {
-      return RowToInsert.of(getRowId(record), recordConverter.convertRecord(record));
-    }
-
-    private String getRowId(SinkRecord record) {
-      return String.format("%s-%d-%d",
-                           record.topic(),
-                           record.kafkaPartition(),
-                           record.kafkaOffset());
-    }
-
-    /**
-     * Create a {@link TableWriter} from this builder.
-     * @return a TableWriter containing the given writer, table, topic, and all added rows.
-     */
+    @Override
     public TableWriter build() {
-      return new TableWriter(writer, table, rows, topic);
+      return new TableWriter(writer, table, rows, topic, recordConverter, schemaManager,
+          sanitizeData);
     }
   }
 }

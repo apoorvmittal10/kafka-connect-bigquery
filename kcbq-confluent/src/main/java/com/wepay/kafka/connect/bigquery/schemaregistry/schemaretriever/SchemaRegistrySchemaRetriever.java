@@ -1,6 +1,7 @@
 package com.wepay.kafka.connect.bigquery.schemaregistry.schemaretriever;
 
 import com.google.cloud.bigquery.TableId;
+import com.google.common.base.Strings;
 
 import com.wepay.kafka.connect.bigquery.api.SchemaRetriever;
 
@@ -11,18 +12,16 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 
+import java.io.IOException;
+import java.util.Map;
+
 import org.apache.avro.Schema.Parser;
 
 import org.apache.kafka.connect.data.Schema;
-
 import org.apache.kafka.connect.errors.ConnectException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-
-import java.util.Map;
 
 /**
  * Uses the Confluent Schema Registry to fetch the latest schema for a given topic.
@@ -61,7 +60,13 @@ public class SchemaRegistrySchemaRetriever implements SchemaRetriever {
   }
 
   @Override
-  public Schema retrieveSchema(TableId table, String topic) {
+  public Schema retrieveSchema(Params params) {
+    // Check if valid topic details are present in request params.
+    if (params == null || Strings.isNullOrEmpty(params.topic())) {
+      throw new ConnectException("Exception while fetching topic details from connect record.");
+    }
+
+    String topic = params.topic();
     String subject = getSubject(topic);
     try {
       logger.debug("Retrieving schema information for topic {} with subject {}", topic, subject);

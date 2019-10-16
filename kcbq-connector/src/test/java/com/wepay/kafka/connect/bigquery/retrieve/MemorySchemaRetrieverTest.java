@@ -5,6 +5,7 @@ import com.google.cloud.bigquery.TableId;
 
 import com.wepay.kafka.connect.bigquery.api.SchemaRetriever;
 
+import com.wepay.kafka.connect.bigquery.api.SchemaRetriever.Params;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 
@@ -25,7 +26,8 @@ public class MemorySchemaRetrieverTest {
     final TableId tableId = getTableId("testTable", "testDataset");
     SchemaRetriever retriever = new MemorySchemaRetriever();
     retriever.configure(new HashMap<>());
-    Assert.assertEquals(retriever.retrieveSchema(tableId, topic), SchemaBuilder.struct().build());
+    Assert.assertEquals(retriever.retrieveSchema(new Params(tableId, topic)),
+        SchemaBuilder.struct().build());
   }
 
   @Test
@@ -38,7 +40,7 @@ public class MemorySchemaRetrieverTest {
     Schema expectedSchema = Schema.OPTIONAL_FLOAT32_SCHEMA;
     retriever.setLastSeenSchema(tableId, topic, expectedSchema);
 
-    Assert.assertEquals(retriever.retrieveSchema(tableId, topic), expectedSchema);
+    Assert.assertEquals(retriever.retrieveSchema(new Params(tableId, topic)), expectedSchema);
   }
 
   @Test
@@ -56,8 +58,9 @@ public class MemorySchemaRetrieverTest {
     retriever.setLastSeenSchema(intTableId, intSchemaTopic, expectedIntSchema);
 
     Assert.assertEquals(
-        retriever.retrieveSchema(floatTableId, floatSchemaTopic), expectedFloatSchema);
-    Assert.assertEquals(retriever.retrieveSchema(intTableId, intSchemaTopic), expectedIntSchema);
+        retriever.retrieveSchema(new Params(floatTableId, floatSchemaTopic)), expectedFloatSchema);
+    Assert.assertEquals(retriever.retrieveSchema(new Params(intTableId, intSchemaTopic)),
+        expectedIntSchema);
   }
 
   @Test
@@ -72,6 +75,7 @@ public class MemorySchemaRetrieverTest {
     retriever.setLastSeenSchema(tableId, intSchemaTopic, firstSchema);
     retriever.setLastSeenSchema(tableId, intSchemaTopic, secondSchema);
 
-    Assert.assertEquals(retriever.retrieveSchema(tableId, intSchemaTopic), secondSchema);
+    Assert.assertEquals(retriever.retrieveSchema(new Params(tableId, intSchemaTopic)),
+        secondSchema);
   }
 }

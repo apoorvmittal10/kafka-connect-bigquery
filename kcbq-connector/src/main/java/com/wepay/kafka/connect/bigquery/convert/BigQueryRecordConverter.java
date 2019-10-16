@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
  */
 public class BigQueryRecordConverter implements RecordConverter<Map<String, Object>> {
 
-  private static final Set<Class> BASIC_TYPES = new HashSet(
+  private static final Set<Class> BASIC_TYPES = new HashSet<>(
           Arrays.asList(
             Boolean.class, Character.class, Byte.class, Short.class,
                   Integer.class, Long.class, Float.class, Double.class, String.class)
@@ -71,6 +71,7 @@ public class BigQueryRecordConverter implements RecordConverter<Map<String, Obje
    *                           consist of both a name and a value.
    * @return The result BigQuery row content.
    */
+  @SuppressWarnings("unchecked")
   public Map<String, Object> convertRecord(SinkRecord kafkaConnectRecord) {
     Schema kafkaConnectSchema = kafkaConnectRecord.valueSchema();
     Object kafkaConnectValue = kafkaConnectRecord.value();
@@ -88,6 +89,7 @@ public class BigQueryRecordConverter implements RecordConverter<Map<String, Obje
     return convertStruct(kafkaConnectRecord.value(), kafkaConnectSchema);
   }
 
+  @SuppressWarnings("unchecked")
   private Object convertSchemalessRecord(Object value) {
     if (value == null) {
       return null;

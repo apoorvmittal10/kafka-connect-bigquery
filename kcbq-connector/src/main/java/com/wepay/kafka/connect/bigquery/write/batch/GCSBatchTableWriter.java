@@ -22,23 +22,24 @@ import com.google.cloud.bigquery.InsertAllRequest.RowToInsert;
 import com.google.cloud.bigquery.TableId;
 
 import com.wepay.kafka.connect.bigquery.convert.RecordConverter;
-
 import com.wepay.kafka.connect.bigquery.write.row.GCSToBQWriter;
-import org.apache.kafka.connect.errors.ConnectException;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+
+import java.util.stream.Collectors;
+import org.apache.kafka.connect.errors.ConnectException;
+
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Batch Table Writer that uploads records to GCS as a blob
  * and then triggers a load job from that GCS file to BigQuery.
  */
-public class GCSBatchTableWriter implements Runnable {
+public class GCSBatchTableWriter extends AbstractTableWriter implements Runnable {
   private static final Logger logger = LoggerFactory.getLogger(GCSBatchTableWriter.class);
 
   private final TableId tableId;
@@ -46,7 +47,7 @@ public class GCSBatchTableWriter implements Runnable {
   private final String bucketName;
   private final String blobName;
 
-  private final List<RowToInsert> rows;
+  private final List<SinkRecord> rows;
   private final GCSToBQWriter writer;
 
   /**
@@ -57,23 +58,29 @@ public class GCSBatchTableWriter implements Runnable {
    * @param baseBlobName the base name of the blob in which the serialized rows should be uploaded.
    *                     The full name is [baseBlobName]_[writerId]_
    */
-  private GCSBatchTableWriter(List<RowToInsert> rows,
+  private GCSBatchTableWriter(List<SinkRecord> rows,
                               GCSToBQWriter writer,
                               TableId tableId,
                               String bucketName,
-                              String baseBlobName) {
+                              String baseBlobName,
+                              RecordConverter<Map<String, Object>> recordConverter,
+                              boolean sanitizeData) {
     this.tableId = tableId;
     this.bucketName = bucketName;
     this.blobName = baseBlobName;
 
     this.rows = rows;
     this.writer = writer;
+
+    this.recordConverter = recordConverter;
+    this.sanitizeData = sanitizeData;
   }
 
   @Override
   public void run() {
     try {
-      writer.writeRows(rows, tableId, bucketName, blobName);
+      writer.writeRows(rows.stream().map(r -> getRecordRow(r)).collect(Collectors.toList()),
+          tableId, bucketName, blobName);
     } catch (ConnectException ex) {
       throw new ConnectException("Failed to write rows to GCS", ex);
     } catch (InterruptedException ex) {
@@ -90,24 +97,28 @@ public class GCSBatchTableWriter implements Runnable {
 
     private final TableId tableId;
 
-    private List<RowToInsert> rows;
+    private List<SinkRecord> rows;
     private final RecordConverter<Map<String, Object>> recordConverter;
     private final GCSToBQWriter writer;
+
+    private final boolean sanitizeData;
 
     /**
      * Create a {@link GCSBatchTableWriter.Builder}.
      *
-     * @param writer the {@link GCSToBQWriter} to use.
+     * @param writer The {@link GCSToBQWriter} to use.
      * @param tableId The bigquery table to be written to.
      * @param gcsBucketName The GCS bucket to write to.
      * @param gcsBlobName The name of the GCS blob to write.
-     * @param recordConverter the {@link RecordConverter} to use.
+     * @param recordConverter The {@link RecordConverter} to use.
+     * @param sanitizeData The boolean specifying whether to sanitize data before persisting.
      */
     public Builder(GCSToBQWriter writer,
                    TableId tableId,
                    String gcsBucketName,
                    String gcsBlobName,
-                   RecordConverter<Map<String, Object>> recordConverter) {
+                   RecordConverter<Map<String, Object>> recordConverter,
+                   boolean sanitizeData) {
 
       this.bucketName = gcsBucketName;
       this.blobName = gcsBlobName;
@@ -117,6 +128,8 @@ public class GCSBatchTableWriter implements Runnable {
       this.rows = new ArrayList<>();
       this.recordConverter = recordConverter;
       this.writer = writer;
+
+      this.sanitizeData = sanitizeData;
     }
 
     public Builder setBlobName(String blobName) {
@@ -124,16 +137,14 @@ public class GCSBatchTableWriter implements Runnable {
       return this;
     }
 
-    /**
-     * Adds a record to the builder.
-     * @param rowToInsert the row to add
-     */
-    public void addRow(RowToInsert rowToInsert) {
-      rows.add(rowToInsert);
+    @Override
+    public void addRow(SinkRecord record) {
+      rows.add(record);
     }
 
     public GCSBatchTableWriter build() {
-      return new GCSBatchTableWriter(rows, writer, tableId, bucketName, blobName);
+      return new GCSBatchTableWriter(rows, writer, tableId, bucketName, blobName, recordConverter,
+          sanitizeData);
     }
   }
 }

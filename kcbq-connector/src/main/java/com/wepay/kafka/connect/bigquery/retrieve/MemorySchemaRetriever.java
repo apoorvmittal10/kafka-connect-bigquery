@@ -4,16 +4,18 @@ import com.google.cloud.bigquery.TableId;
 
 import com.wepay.kafka.connect.bigquery.api.SchemaRetriever;
 
+import java.util.Map;
+
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
+
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
+import org.apache.kafka.connect.errors.ConnectException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Map;
 
 /**
  * Uses the Confluent Schema Registry to fetch the latest schema for a given topic.
@@ -40,9 +42,13 @@ public class MemorySchemaRetriever implements SchemaRetriever {
   }
 
   @Override
-  public Schema retrieveSchema(TableId table, String topic) {
-    String tableName = table.getTable();
-    Schema schema = schemaCache.get(getCacheKey(tableName, topic));
+  public Schema retrieveSchema(Params params) {
+    if (params == null || params.tableId() == null) {
+      throw new ConnectException("Exception while retrieving schema, null params encountered.");
+    }
+
+    String tableName = params.tableId().getTable();
+    Schema schema = schemaCache.get(getCacheKey(tableName, params.topic()));
     if (schema != null) {
       return schema;
     }

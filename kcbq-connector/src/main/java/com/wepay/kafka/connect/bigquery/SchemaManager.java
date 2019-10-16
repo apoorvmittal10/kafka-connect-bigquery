@@ -9,8 +9,10 @@ import com.google.cloud.bigquery.TimePartitioning;
 import com.wepay.kafka.connect.bigquery.api.SchemaRetriever;
 import com.wepay.kafka.connect.bigquery.convert.SchemaConverter;
 
-import com.wepay.kafka.connect.bigquery.write.row.AdaptiveBigQueryWriter;
+import java.util.List;
+import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,21 +43,50 @@ public class SchemaManager {
 
   /**
    * Create a new table in BigQuery.
+   *
    * @param table The BigQuery table to create.
    * @param topic The Kafka topic used to determine the schema.
    */
   public void createTable(TableId table, String topic) {
-    Schema kafkaConnectSchema = schemaRetriever.retrieveSchema(table, topic);
+    createTable(table, topic, null);
+  }
+
+  /**
+   * Create a new table in BigQuery. Method is backward compatible when called with
+   * SchemaRegistrySchemaRetriever as all required params have been filled.
+   *
+   * @param table The BigQuery table to create.
+   * @param topic The Kafka topic used to determine the schema.
+   * @param connectRecord The ConnectRecord which could be used to fetch value schema.
+   */
+  public void createTable(TableId table, String topic, ConnectRecord connectRecord) {
+    Schema kafkaConnectSchema = schemaRetriever.retrieveSchema(
+        new SchemaRetriever.Params(table, topic, connectRecord));
     bigQuery.create(constructTableInfo(table, kafkaConnectSchema));
   }
 
   /**
    * Update an existing table in BigQuery.
+   *
    * @param table The BigQuery table to update.
    * @param topic The Kafka topic used to determine the schema.
    */
   public void updateSchema(TableId table, String topic) {
-    Schema kafkaConnectSchema = schemaRetriever.retrieveSchema(table, topic);
+    updateSchema(table, topic, null);
+  }
+
+  /**
+   * Update an existing table in BigQuery. Method is backward compatible when called with
+   * SchemaRegistrySchemaRetriever as all required params have been filled.
+   *
+   * @param table The BigQuery table to update.
+   * @param topic The Kafka topic used to determine the schema.
+   * @param connectRecords The ConnectRecord list which could be used to retrieve schema.
+   */
+  public void updateSchema(TableId table, String topic,
+      List<? extends ConnectRecord> connectRecords) {
+    Schema kafkaConnectSchema = schemaRetriever.retrieveSchema(
+        new SchemaRetriever.Params(table, topic, connectRecords));
     TableInfo tableInfo = constructTableInfo(table, kafkaConnectSchema);
     logger.info("Attempting to update table `{}` with schema {}",
         table, tableInfo.getDefinition().getSchema());

@@ -31,12 +31,15 @@ import com.google.cloud.bigquery.InsertAllRequest;
 import com.google.cloud.bigquery.InsertAllResponse;
 import com.google.cloud.storage.Storage;
 
+import com.wepay.kafka.connect.bigquery.BigQuerySinkConnectorTest.MockSchemaRetriever;
 import com.wepay.kafka.connect.bigquery.BigQuerySinkTask;
 import com.wepay.kafka.connect.bigquery.SinkTaskPropertiesFactory;
+import com.wepay.kafka.connect.bigquery.api.SchemaRetriever;
 import com.wepay.kafka.connect.bigquery.config.BigQuerySinkConfig;
 import com.wepay.kafka.connect.bigquery.config.BigQuerySinkTaskConfig;
 import com.wepay.kafka.connect.bigquery.exception.BigQueryConnectException;
 
+import com.wepay.kafka.connect.bigquery.retrieve.MemorySchemaRetriever;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -206,6 +209,7 @@ public class BigQueryWriterTest {
     properties.put(BigQuerySinkTaskConfig.BIGQUERY_RETRY_WAIT_CONFIG, bigqueryRetryWait);
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, String.format(".*=%s", dataset));
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
     return properties;
   }
 

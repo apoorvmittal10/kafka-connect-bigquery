@@ -29,13 +29,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.cloud.bigquery.BigQuery;
+import com.google.cloud.bigquery.BigQuery.TableOption;
 import com.google.cloud.bigquery.BigQueryError;
 import com.google.cloud.bigquery.BigQueryException;
 import com.google.cloud.bigquery.InsertAllRequest;
 import com.google.cloud.bigquery.InsertAllResponse;
+import com.google.cloud.bigquery.Table;
 import com.google.cloud.bigquery.TableId;
 import com.google.cloud.storage.Storage;
 
+import com.wepay.kafka.connect.bigquery.BigQuerySinkConnectorTest.MockSchemaRetriever;
 import com.wepay.kafka.connect.bigquery.api.SchemaRetriever;
 import com.wepay.kafka.connect.bigquery.config.BigQuerySinkConfig;
 import com.wepay.kafka.connect.bigquery.config.BigQuerySinkTaskConfig;
@@ -59,6 +62,7 @@ import org.mockito.Captor;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.RejectedExecutionException;
+import org.mockito.Matchers;
 
 public class BigQuerySinkTaskTest {
   private static SinkTaskPropertiesFactory propertiesFactory;
@@ -75,14 +79,17 @@ public class BigQuerySinkTaskTest {
     Map<String, String> properties = propertiesFactory.getProperties();
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, ".*=scratch");
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
 
     BigQuery bigQuery = mock(BigQuery.class);
     Storage storage = mock(Storage.class);
+    Table table = mock(Table.class);
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
     InsertAllResponse insertAllResponse = mock(InsertAllResponse.class);
 
     when(bigQuery.insertAll(anyObject())).thenReturn(insertAllResponse);
+    when(bigQuery.getTable(any(), Matchers.<TableOption>anyVararg())).thenReturn(table);
     when(insertAllResponse.hasErrors()).thenReturn(false);
 
     BigQuerySinkTask testTask = new BigQuerySinkTask(bigQuery, null, storage);
@@ -101,6 +108,7 @@ public class BigQuerySinkTaskTest {
     Map<String, String> properties = propertiesFactory.getProperties();
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, ".*=scratch");
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
 
     BigQuery bigQuery = mock(BigQuery.class);
     Storage storage = mock(Storage.class);
@@ -166,6 +174,7 @@ public class BigQuerySinkTaskTest {
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, ".*=scratch");
     properties.put(BigQuerySinkTaskConfig.BIGQUERY_MESSAGE_TIME_PARTITIONING_CONFIG, "true");
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
 
     BigQuery bigQuery = mock(BigQuery.class);
     Storage storage = mock(Storage.class);
@@ -197,6 +206,7 @@ public class BigQuerySinkTaskTest {
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, ".*=scratch");
     properties.put(BigQuerySinkTaskConfig.BIGQUERY_MESSAGE_TIME_PARTITIONING_CONFIG, "true");
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
 
     BigQuery bigQuery = mock(BigQuery.class);
     Storage storage = mock(Storage.class);
@@ -225,6 +235,7 @@ public class BigQuerySinkTaskTest {
     Map<String, String> properties = propertiesFactory.getProperties();
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, String.format(".*=%s", dataset));
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
 
     BigQuery bigQuery = mock(BigQuery.class);
     Storage storage = mock(Storage.class);
@@ -270,6 +281,7 @@ public class BigQuerySinkTaskTest {
     properties.put(BigQuerySinkTaskConfig.BIGQUERY_RETRY_WAIT_CONFIG, "2000");
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, String.format(".*=%s", dataset));
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
 
     BigQuery bigQuery = mock(BigQuery.class);
     Storage storage = mock(Storage.class);
@@ -303,6 +315,7 @@ public class BigQuerySinkTaskTest {
     properties.put(BigQuerySinkTaskConfig.BIGQUERY_RETRY_WAIT_CONFIG, "2000");
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, String.format(".*=%s", dataset));
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
 
     BigQuery bigQuery = mock(BigQuery.class);
     Storage storage = mock(Storage.class);
@@ -337,14 +350,17 @@ public class BigQuerySinkTaskTest {
     properties.put(BigQuerySinkTaskConfig.BIGQUERY_RETRY_WAIT_CONFIG, "2000");
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, String.format(".*=%s", dataset));
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
 
     BigQuery bigQuery = mock(BigQuery.class);
     Storage storage = mock(Storage.class);
+    Table table = mock(Table.class);
 
     InsertAllResponse insertAllResponse = mock(InsertAllResponse.class);
     BigQueryError quotaExceededError = new BigQueryError("quotaExceeded", null, null);
     when(bigQuery.insertAll(anyObject()))
       .thenThrow(new BigQueryException(403, "mock quota exceeded", quotaExceededError));
+    when(bigQuery.getTable(any(), Matchers.<TableOption>anyVararg())).thenReturn(table);
     when(insertAllResponse.hasErrors()).thenReturn(false);
 
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);
@@ -365,6 +381,7 @@ public class BigQuerySinkTaskTest {
     Map<String, String> properties = propertiesFactory.getProperties();
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, String.format(".*=%s", dataset));
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
 
     BigQuery bigQuery  = mock(BigQuery.class);
     Storage storage = mock(Storage.class);
@@ -412,6 +429,7 @@ public class BigQuerySinkTaskTest {
     Map<String, String> properties = propertiesFactory.getProperties();
     properties.put(BigQuerySinkConfig.TOPICS_CONFIG, topic);
     properties.put(BigQuerySinkConfig.DATASETS_CONFIG, String.format(".*=%s", dataset));
+    properties.put(BigQuerySinkConfig.SCHEMA_RETRIEVER_CONFIG, MockSchemaRetriever.class.getName());
 
     BigQuery bigQuery = mock(BigQuery.class);
     SinkTaskContext sinkTaskContext = mock(SinkTaskContext.class);

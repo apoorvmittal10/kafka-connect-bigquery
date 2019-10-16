@@ -562,19 +562,18 @@ public class BigQueryRecordConverterTest {
 
   @Test
   public void testValidMapSchemaless() {
-    Map kafkaConnectMap = new HashMap<Object, Object>(){{
-      put("f1", "f2");
-      put( "f3" ,
-              new HashMap<Object, Object>(){{
-                put("f4", "false");
-                put("f5", true);
-                put("f6", new ArrayList<String>(){{
-                  add("hello");
-                  add("world");
-                }});
-              }}
-      );
-    }};
+    Map<Object, Object> kafkaConnectMap = new HashMap<>();
+
+    Map<Object, Object> nestedConnectMap = new HashMap<>();
+    nestedConnectMap.put("f4", false);
+    nestedConnectMap.put("f5", true);
+    nestedConnectMap.put("f6", new ArrayList<String>() {{
+      add("hello");
+      add("world");
+    }});
+
+    kafkaConnectMap.put("f1", "f2");
+    kafkaConnectMap.put("f3", nestedConnectMap);
 
     SinkRecord kafkaConnectRecord = spoofSinkRecord(null, kafkaConnectMap);
     Map<String, Object> convertedMap =
@@ -584,19 +583,18 @@ public class BigQueryRecordConverterTest {
 
   @Test (expected = ConversionConnectException.class)
   public void testInvalidMapSchemaless() {
-    Map kafkaConnectMap = new HashMap<Object, Object>(){{
-      put("f1", "f2");
-      put( "f3" ,
-              new HashMap<Object, Object>(){{
-                put(1, "false");
-                put("f5", true);
-                put("f6", new ArrayList<String>(){{
-                  add("hello");
-                  add("world");
-                }});
-              }}
-      );
-    }};
+    Map<Object, Object> kafkaConnectMap = new HashMap<>();
+
+    Map<Object, Object> nestedConnectMap = new HashMap<>();
+    nestedConnectMap.put(1, false);
+    nestedConnectMap.put("f5", true);
+    nestedConnectMap.put("f6", new ArrayList<String>() {{
+      add("hello");
+      add("world");
+    }});
+
+    kafkaConnectMap.put("f1", "f2");
+    kafkaConnectMap.put("f3", nestedConnectMap);
 
     SinkRecord kafkaConnectRecord = spoofSinkRecord(null, kafkaConnectMap);
     Map<String, Object> convertedMap =
@@ -605,19 +603,18 @@ public class BigQueryRecordConverterTest {
 
   @Test
   public void testMapSchemalessConvertDouble() {
-    Map kafkaConnectMap = new HashMap<Object, Object>(){{
-      put("f1", Double.POSITIVE_INFINITY);
-      put( "f3" ,
-              new HashMap<Object, Object>(){{
-                put("f4", Double.POSITIVE_INFINITY);
-                put("f5", true);
-                put("f6", new ArrayList<Double>(){{
-                  add(1.2);
-                  add(Double.POSITIVE_INFINITY);
-                }});
-              }}
-      );
-    }};
+    Map<Object, Object> kafkaConnectMap = new HashMap<>();
+
+    Map<Object, Object> nestedConnectMap = new HashMap<>();
+    nestedConnectMap.put("f4", Double.POSITIVE_INFINITY);
+    nestedConnectMap.put("f5", true);
+    nestedConnectMap.put("f6", new ArrayList<Double>() {{
+        add(1.2);
+        add(Double.POSITIVE_INFINITY);
+    }});
+
+    kafkaConnectMap.put("f1", Double.POSITIVE_INFINITY);
+    kafkaConnectMap.put("f3", nestedConnectMap);
 
     SinkRecord kafkaConnectRecord = spoofSinkRecord(null, kafkaConnectMap);
     Map<String, Object> convertedMap =
@@ -631,19 +628,19 @@ public class BigQueryRecordConverterTest {
   public void testMapSchemalessConvertBytes() {
     byte[] helloWorld = "helloWorld".getBytes();
     ByteBuffer helloWorldBuffer = ByteBuffer.wrap(helloWorld);
-    Map kafkaConnectMap = new HashMap<Object, Object>(){{
-      put("f1", helloWorldBuffer);
-      put( "f3" ,
-              new HashMap<Object, Object>(){{
-                put("f4", helloWorld);
-                put("f5", true);
-                put("f6", new ArrayList<Double>(){{
-                  add(1.2);
-                  add(Double.POSITIVE_INFINITY);
-                }});
-              }}
-      );
-    }};
+
+    Map<Object, Object> kafkaConnectMap = new HashMap<>();
+
+    Map<Object, Object> nestedConnectMap = new HashMap<>();
+    nestedConnectMap.put("f4", helloWorld);
+    nestedConnectMap.put("f5", true);
+    nestedConnectMap.put("f6", new ArrayList<Double>() {{
+      add(1.2);
+      add(Double.POSITIVE_INFINITY);
+    }});
+
+    kafkaConnectMap.put("f1", helloWorldBuffer);
+    kafkaConnectMap.put("f3", nestedConnectMap);
 
     SinkRecord kafkaConnectRecord = spoofSinkRecord(null, kafkaConnectMap);
     Map<String, Object> convertedMap =
